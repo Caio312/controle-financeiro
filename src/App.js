@@ -60,6 +60,7 @@ function App() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [entries, setEntries] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [budgets, setBudgets] = useState({});
   const [userConfig, setUserConfig] = useState({
     categories: ['Alimentação', 'Transporte', 'Moradia', 'Lazer', 'Saúde', 'Educação', 'Outros'],
     paymentMethods: ['Dinheiro', 'Cartão de Crédito', 'Débito', 'PIX'],
@@ -242,6 +243,7 @@ function App() {
       const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
       const entriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`);
       const expensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`);
+      const budgetRef = doc(db, `artifacts/${appId}/users/${userId}/budgets`, monthStr);
 
       const unsubscribeEntries = onSnapshot(entriesRef, (snapshot) => {
         const fetchedEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -259,13 +261,26 @@ function App() {
         console.error("Erro ao carregar despesas:", error);
       });
 
+      const unsubscribeBudgets = onSnapshot(budgetRef, (docSnap) => {
+        if (docSnap.exists()) {
+          setBudgets(docSnap.data());
+          console.log("Budgets loaded:", docSnap.data());
+        } else {
+          setBudgets({}); // Nenhum orçamento definido para este mês
+          console.log("No budgets found for this month.");
+        }
+      }, (error) => {
+        console.error("Erro ao carregar orçamentos:", error);
+      });
+
       return () => {
         unsubscribeEntries();
         unsubscribeExpenses();
-        console.log("Cleaning up entries/expenses listeners.");
+        unsubscribeBudgets();
+        console.log("Cleaning up data listeners.");
       };
     } else if (isAuthReady && !userId) {
-      console.warn("Entries/Expenses not loaded: Authentication ready but userId is null.");
+      console.warn("Data not loaded: Authentication ready but userId is null.");
     }
   }, [isAuthReady, userId, db, currentMonthIndex, currentYear, appId]);
 
@@ -376,6 +391,13 @@ function App() {
               Projeção Diária
             </button>
             <button
+              onClick={() => setActiveTab('orcamentos')}
+              className={`px-3 py-1 text-sm rounded-md font-medium transition duration-200
+                ${activeTab === 'orcamentos' ? 'bg-white text-blue-700 shadow' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'}`}
+            >
+              Orçamentos
+            </button>
+            <button
               onClick={() => setActiveTab('configuracoes')}
               className={`px-3 py-1 text-sm rounded-md font-medium transition duration-200
                 ${activeTab === 'configuracoes' ? 'bg-white text-blue-700 shadow' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'}`}
@@ -404,6 +426,7 @@ function App() {
             <MonthlySummaryChart
               entries={entries}
               expenses={expenses}
+              budgets={budgets}
               currentMonthIndex={currentMonthIndex}
               currentYear={currentYear}
             />
@@ -418,6 +441,14 @@ function App() {
             <DailyProjection
               entries={entries}
               expenses={expenses}
+              currentMonthIndex={currentMonthIndex}
+              currentYear={currentYear}
+            />
+          )}
+          {activeTab === 'orcamentos' && (
+            <BudgetSection
+              budgets={budgets}
+              userConfig={userConfig}
               currentMonthIndex={currentMonthIndex}
               currentYear={currentYear}
             />
@@ -1449,7 +1480,7 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
   };
 
   // Novo componente para o Resumo Mensal com gráfico de pizza
-  const MonthlySummaryChart = ({ entries, expenses, currentMonthIndex, currentYear }) => {
+  const MonthlySummaryChart = ({ entries, expenses, budgets, currentMonthIndex, currentYear }) => {
     const [chartData, setChartData] = useState([]);
     const [totalIncome, setTotalIncome] = useState(0);
     const [totalExpenses, setTotalExpenses] = useState(0);
@@ -1509,11 +1540,42 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
           </p>
         </div>
 
-        {chartData.length === 0 || totalIncome === 0 ? (
-          <div className="mt-8 p-4 bg-gray-50 rounded-lg text-center text-gray-600 text-sm sm:text-base">
-            Nenhum dado de despesa ou entrada para exibir no gráfico para este mês.
+        <div className="mt-8">
+          <h3 className="text-lg sm:text-xl font-bold mb-4 text-blue-700">Progresso do Orçamento</h3>
+          <div className="space-y-4">
+            {Object.keys(budgets).length > 0 ? (
+              Object.keys(budgets).map(category => {
+                const budgetAmount = budgets[category] || 0;
+                const spentAmount = expenses.filter(e => e.category === category).reduce((sum, e) => sum + e.value, 0);
+                const progress = budgetAmount > 0 ? (spentAmount / budgetAmount) * 100 : 0;
+                const progressBarColor = progress > 100 ? 'bg-red-500' : 'bg-green-500';
+
+                return (
+                  <div key={category}>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-semibold text-gray-700">{category}</span>
+                      <span className="text-sm text-gray-600">
+                        R$ {spentAmount.toFixed(2)} / R$ {budgetAmount.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-4">
+                      <div
+                        className={`${progressBarColor} h-4 rounded-full`}
+                        style={{ width: `${Math.min(progress, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-600 text-sm sm:text-base">
+                Nenhum orçamento definido para este mês.
+              </div>
+            )}
           </div>
-        ) : (
+        </div>
+
+        {chartData.length > 0 && totalIncome > 0 && (
           <div className="mt-8">
             <h3 className="text-lg sm:text-xl font-bold mb-4 text-blue-700">Distribuição de Gastos em Relação à Entrada</h3>
             <ResponsiveContainer width="100%" height={300}>
@@ -1541,5 +1603,63 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
       </div>
     );
   };
+
+// Componente para a seção de Orçamentos
+const BudgetSection = ({ budgets, userConfig, currentMonthIndex, currentYear }) => {
+  const { db, userId, appId, showModal } = useContext(FirebaseContext);
+  const [localBudgets, setLocalBudgets] = useState(budgets);
+
+  useEffect(() => {
+    setLocalBudgets(budgets);
+  }, [budgets]);
+
+  const handleBudgetChange = (category, value) => {
+    setLocalBudgets(prev => ({
+      ...prev,
+      [category]: parseFloat(value) || 0,
+    }));
+  };
+
+  const handleSaveBudgets = async () => {
+    if (!db || !userId) return;
+    const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
+    const budgetDocRef = doc(db, `artifacts/${appId}/users/${userId}/budgets`, monthStr);
+    try {
+      await setDoc(budgetDocRef, localBudgets, { merge: true });
+      showModal('Orçamentos guardados com sucesso!');
+    } catch (e) {
+      console.error("Erro ao guardar orçamentos: ", e);
+      showModal('Erro ao guardar orçamentos.');
+    }
+  };
+
+  return (
+    <div className="bg-white p-6 rounded-lg shadow-lg">
+      <h2 className="text-xl sm:text-2xl font-bold mb-4 text-blue-700">Gestão de Orçamentos</h2>
+      <div className="space-y-4">
+        {userConfig.categories.map(category => (
+          <div key={category} className="flex items-center justify-between">
+            <label className="text-lg text-gray-700">{category}</label>
+            <input
+              type="number"
+              value={localBudgets[category] || ''}
+              onChange={(e) => handleBudgetChange(category, e.target.value)}
+              className="p-2 border border-gray-300 rounded-md w-40 text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="R$ 0,00"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end mt-6">
+        <button
+          onClick={handleSaveBudgets}
+          className="px-6 py-3 bg-blue-600 text-white rounded-md shadow-md hover:bg-blue-700 transition duration-200"
+        >
+          Guardar Orçamentos
+        </button>
+      </div>
+    </div>
+  );
+};
 
   export default App;
