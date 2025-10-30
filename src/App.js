@@ -303,7 +303,7 @@ function App() {
 
   console.log("App is fully loaded and ready. userId:", userId);
   return (
-    <FirebaseContext.Provider value={{ db, userId, userConfig, setUserConfig, showModal, setGlobalLoading }}>
+    <FirebaseContext.Provider value={{ db, userId, userConfig, setUserConfig, showModal, setGlobalLoading, appId }}>
       <div className="min-h-screen bg-gray-100 font-inter text-gray-800 flex flex-col">
         <LoadingOverlay isLoading={globalLoading} />
         <CustomModal
@@ -433,7 +433,7 @@ function App() {
 
 // Componente para a seção de Entradas
 const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
-  const { db, userId, showModal } = useContext(FirebaseContext);
+  const { db, userId, showModal, appId } = useContext(FirebaseContext);
   const [newEntry, setNewEntry] = useState({ date: '', description: '', value: '', type: 'Fixo' });
   const [editingEntry, setEditingEntry] = useState(null);
 
@@ -453,7 +453,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
     const targetYear = entryDate.getFullYear();
     const targetMonthIndex = entryDate.getMonth();
     const monthStr = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, '0')}`;
-    const entriesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/entries`);
+    const entriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`);
 
     try {
       await addDoc(entriesRef, {
@@ -485,7 +485,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
     const targetYear = entryDate.getFullYear();
     const targetMonthIndex = entryDate.getMonth();
     const monthStr = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, '0')}`;
-    const entryDocRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/entries`, editingEntry.id);
+    const entryDocRef = doc(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`, editingEntry.id);
 
     try {
       await updateDoc(entryDocRef, {
@@ -506,7 +506,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
     showModal('Tem certeza que deseja excluir esta entrada?', async () => {
       if (!db || !userId) return;
       const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
-      const entryDocRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/entries`, entryId);
+      const entryDocRef = doc(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`, entryId);
       try {
         await deleteDoc(entryDocRef);
         showModal('Entrada excluída com sucesso!');
@@ -528,7 +528,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
 
       for (let i = currentMonthIndex + 1; i < 12; i++) {
         const futureMonthStr = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
-        const futureEntriesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${futureMonthStr}/entries`);
+        const futureEntriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${futureMonthStr}/entries`);
 
         const q = query(futureEntriesRef,
           where("description", "==", entryToPropagate.description),
@@ -664,7 +664,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
 
 // Componente para a seção de Despesas
 const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
-  const { db, userId, userConfig, showModal } = useContext(FirebaseContext);
+  const { db, userId, userConfig, showModal, appId } = useContext(FirebaseContext);
   const [newExpense, setNewExpense] = useState({
     date: '',
     type: 'Fixo',
@@ -711,7 +711,7 @@ const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
     const targetYear = expenseDate.getFullYear();
     const targetMonthIndex = expenseDate.getMonth();
     const monthStr = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, '0')}`;
-    const expensesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/expenses`);
+    const expensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`);
 
     try {
       await addDoc(expensesRef, {
@@ -754,7 +754,7 @@ const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
     const targetYear = expenseDate.getFullYear();
     const targetMonthIndex = expenseDate.getMonth();
     const monthStr = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, '0')}`;
-    const expenseDocRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/expenses`, editingExpense.id);
+    const expenseDocRef = doc(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`, editingExpense.id);
 
     try {
       await updateDoc(expenseDocRef, {
@@ -786,7 +786,7 @@ const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
     showModal('Tem certeza que deseja excluir esta despesa?', async () => {
       if (!db || !userId) return;
       const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
-      const expenseDocRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/expenses`, expenseId);
+      const expenseDocRef = doc(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`, expenseId);
       try {
         await deleteDoc(expenseDocRef);
         showModal('Despesa excluída com sucesso!');
@@ -808,7 +808,7 @@ const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
 
       for (let i = currentMonthIndex + 1; i < 12; i++) {
         const futureMonthStr = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
-        const futureExpensesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${futureMonthStr}/expenses`);
+        const futureExpensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${futureMonthStr}/expenses`);
 
         const q = query(futureExpensesRef,
           where("description", "==", expenseToPropagate.description),
@@ -1074,7 +1074,7 @@ const ExpenseDistributionChart = ({ expenses }) => {
 
 // Componente para a seção de Configurações
 const SettingsSection = () => {
-  const { db, userId, userConfig, setUserConfig, showModal } = useContext(FirebaseContext);
+  const { db, userId, userConfig, setUserConfig, showModal, appId } = useContext(FirebaseContext);
   const [newCategory, setNewCategory] = useState('');
   const [newPaymentMethod, setNewPaymentMethod] = useState('');
   const [newExpenseType, setNewExpenseType] = useState('');
@@ -1082,7 +1082,7 @@ const SettingsSection = () => {
 
   const saveConfig = async (updatedConfig) => {
     if (!db || !userId) return;
-    const userConfigRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/userConfig`, 'settings');
+    const userConfigRef = doc(db, `artifacts/${appId}/users/${userId}/userConfig`, 'settings');
     try {
       await setDoc(userConfigRef, updatedConfig, { merge: true });
       setUserConfig(updatedConfig);
@@ -1188,7 +1188,7 @@ const SettingsSection = () => {
 
 // Componente para o Resumo Anual
 const AnnualSummary = ({ currentYear, activeTab }) => {
-  const { db, userId, showModal, setGlobalLoading } = useContext(FirebaseContext);
+  const { db, userId, showModal, setGlobalLoading, appId } = useContext(FirebaseContext);
   const [annualData, setAnnualData] = useState([]);
   const [loadingAnnual, setLoadingAnnual] = useState(false);
 
@@ -1212,8 +1212,8 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
       try {
         for (let i = 0; i < 12; i++) {
           const prevMonthStr = `${previousYear}-${String(i + 1).padStart(2, '0')}`;
-          const prevEntriesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${prevMonthStr}/entries`);
-          const prevExpensesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${prevMonthStr}/expenses`);
+          const prevEntriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${prevMonthStr}/entries`);
+          const prevExpensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${prevMonthStr}/expenses`);
 
           const prevEntriesSnap = await getDocs(prevEntriesRef);
           const prevExpensesSnap = await getDocs(prevExpensesRef);
@@ -1234,8 +1234,8 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
 
       for (let i = 0; i < 12; i++) {
         const monthStr = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
-        const entriesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/entries`);
-        const expensesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/expenses`);
+        const entriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`);
+        const expensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`);
 
         try {
           const entriesSnapshot = await getDocs(entriesRef);
@@ -1272,7 +1272,7 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
     };
 
     fetchAnnualData();
-  }, [db, userId, currentYear, activeTab, db.app.options.projectId, setGlobalLoading]);
+  }, [db, userId, currentYear, activeTab, appId, setGlobalLoading]);
 
   const exportToCSV = () => {
     if (annualData.length === 0) {
@@ -1381,7 +1381,10 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
         const projection = [];
         let currentBalance = 0;
 
-        const sortedTransactions = [...entries, ...expenses].sort((a, b) => {
+        const allEntries = entries.map(e => ({ ...e, type: 'entry' }));
+        const allExpenses = expenses.map(e => ({ ...e, type: 'expense' }));
+
+        const sortedTransactions = [...allEntries, ...allExpenses].sort((a, b) => {
           return new Date(a.date) - new Date(b.date);
         });
 
@@ -1391,9 +1394,9 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
 
           sortedTransactions.forEach(transaction => {
             if (transaction.date === dateStr) {
-              if (transaction.description) {
+              if (transaction.type === 'entry') {
                 dailyNet += transaction.value;
-              } else {
+              } else { // type === 'expense'
                 dailyNet -= transaction.value;
               }
             }
