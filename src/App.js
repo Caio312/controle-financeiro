@@ -60,7 +60,6 @@ function App() {
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [entries, setEntries] = useState([]);
   const [expenses, setExpenses] = useState([]);
-  const [budgets, setBudgets] = useState({});
   const [userConfig, setUserConfig] = useState({
     categories: ['Alimentação', 'Transporte', 'Moradia', 'Lazer', 'Saúde', 'Educação', 'Outros'],
     paymentMethods: ['Dinheiro', 'Cartão de Crédito', 'Débito', 'PIX'],
@@ -234,7 +233,7 @@ function App() {
     } else if (isAuthReady && !userId) {
       console.warn("User config not loaded: Authentication ready but userId is null.");
     }
-  }, [isAuthReady, userId, db, appId, userConfig]);
+  }, [isAuthReady, userId, db, appId]);
 
   // Carregar entradas e despesas para o mês ativo
   useEffect(() => {
@@ -243,7 +242,6 @@ function App() {
       const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
       const entriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`);
       const expensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`);
-      const budgetRef = doc(db, `artifacts/${appId}/users/${userId}/budgets`, monthStr);
 
       const unsubscribeEntries = onSnapshot(entriesRef, (snapshot) => {
         const fetchedEntries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -261,26 +259,13 @@ function App() {
         console.error("Erro ao carregar despesas:", error);
       });
 
-      const unsubscribeBudgets = onSnapshot(budgetRef, (docSnap) => {
-        if (docSnap.exists()) {
-          setBudgets(docSnap.data());
-          console.log("Budgets loaded:", docSnap.data());
-        } else {
-          setBudgets({}); // Nenhum orçamento definido para este mês
-          console.log("No budgets found for this month.");
-        }
-      }, (error) => {
-        console.error("Erro ao carregar orçamentos:", error);
-      });
-
       return () => {
         unsubscribeEntries();
         unsubscribeExpenses();
-        unsubscribeBudgets();
-        console.log("Cleaning up data listeners.");
+        console.log("Cleaning up entries/expenses listeners.");
       };
     } else if (isAuthReady && !userId) {
-      console.warn("Data not loaded: Authentication ready but userId is null.");
+      console.warn("Entries/Expenses not loaded: Authentication ready but userId is null.");
     }
   }, [isAuthReady, userId, db, currentMonthIndex, currentYear, appId]);
 
@@ -318,7 +303,7 @@ function App() {
 
   console.log("App is fully loaded and ready. userId:", userId);
   return (
-    <FirebaseContext.Provider value={{ db, userId, userConfig, setUserConfig, showModal, setGlobalLoading, appId }}>
+    <FirebaseContext.Provider value={{ db, userId, userConfig, setUserConfig, showModal, setGlobalLoading }}>
       <div className="min-h-screen bg-gray-100 font-inter text-gray-800 flex flex-col">
         <LoadingOverlay isLoading={globalLoading} />
         <CustomModal
@@ -391,13 +376,6 @@ function App() {
               Projeção Diária
             </button>
             <button
-              onClick={() => setActiveTab('orcamentos')}
-              className={`px-3 py-1 text-sm rounded-md font-medium transition duration-200
-                ${activeTab === 'orcamentos' ? 'bg-white text-blue-700 shadow' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'}`}
-            >
-              Orçamentos
-            </button>
-            <button
               onClick={() => setActiveTab('configuracoes')}
               className={`px-3 py-1 text-sm rounded-md font-medium transition duration-200
                 ${activeTab === 'configuracoes' ? 'bg-white text-blue-700 shadow' : 'bg-gray-300 text-gray-700 hover:bg-gray-400'}`}
@@ -426,7 +404,6 @@ function App() {
             <MonthlySummaryChart
               entries={entries}
               expenses={expenses}
-              budgets={budgets}
               currentMonthIndex={currentMonthIndex}
               currentYear={currentYear}
             />
@@ -445,14 +422,6 @@ function App() {
               currentYear={currentYear}
             />
           )}
-          {activeTab === 'orcamentos' && (
-            <BudgetSection
-              budgets={budgets}
-              userConfig={userConfig}
-              currentMonthIndex={currentMonthIndex}
-              currentYear={currentYear}
-            />
-          )}
           {activeTab === 'configuracoes' && (
             <SettingsSection />
           )}
@@ -464,7 +433,7 @@ function App() {
 
 // Componente para a seção de Entradas
 const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
-  const { db, userId, showModal, appId } = useContext(FirebaseContext);
+  const { db, userId, showModal } = useContext(FirebaseContext);
   const [newEntry, setNewEntry] = useState({ date: '', description: '', value: '', type: 'Fixo' });
   const [editingEntry, setEditingEntry] = useState(null);
 
@@ -484,7 +453,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
     const targetYear = entryDate.getFullYear();
     const targetMonthIndex = entryDate.getMonth();
     const monthStr = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, '0')}`;
-    const entriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`);
+    const entriesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/entries`);
 
     try {
       await addDoc(entriesRef, {
@@ -516,7 +485,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
     const targetYear = entryDate.getFullYear();
     const targetMonthIndex = entryDate.getMonth();
     const monthStr = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, '0')}`;
-    const entryDocRef = doc(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`, editingEntry.id);
+    const entryDocRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/entries`, editingEntry.id);
 
     try {
       await updateDoc(entryDocRef, {
@@ -537,7 +506,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
     showModal('Tem certeza que deseja excluir esta entrada?', async () => {
       if (!db || !userId) return;
       const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
-      const entryDocRef = doc(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`, entryId);
+      const entryDocRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/entries`, entryId);
       try {
         await deleteDoc(entryDocRef);
         showModal('Entrada excluída com sucesso!');
@@ -559,7 +528,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
 
       for (let i = currentMonthIndex + 1; i < 12; i++) {
         const futureMonthStr = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
-        const futureEntriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${futureMonthStr}/entries`);
+        const futureEntriesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${futureMonthStr}/entries`);
 
         const q = query(futureEntriesRef,
           where("description", "==", entryToPropagate.description),
@@ -695,7 +664,7 @@ const EntriesSection = ({ entries, currentMonthIndex, currentYear }) => {
 
 // Componente para a seção de Despesas
 const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
-  const { db, userId, userConfig, showModal, appId } = useContext(FirebaseContext);
+  const { db, userId, userConfig, showModal } = useContext(FirebaseContext);
   const [newExpense, setNewExpense] = useState({
     date: '',
     type: 'Fixo',
@@ -742,7 +711,7 @@ const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
     const targetYear = expenseDate.getFullYear();
     const targetMonthIndex = expenseDate.getMonth();
     const monthStr = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, '0')}`;
-    const expensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`);
+    const expensesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/expenses`);
 
     try {
       await addDoc(expensesRef, {
@@ -785,7 +754,7 @@ const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
     const targetYear = expenseDate.getFullYear();
     const targetMonthIndex = expenseDate.getMonth();
     const monthStr = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, '0')}`;
-    const expenseDocRef = doc(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`, editingExpense.id);
+    const expenseDocRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/expenses`, editingExpense.id);
 
     try {
       await updateDoc(expenseDocRef, {
@@ -817,7 +786,7 @@ const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
     showModal('Tem certeza que deseja excluir esta despesa?', async () => {
       if (!db || !userId) return;
       const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
-      const expenseDocRef = doc(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`, expenseId);
+      const expenseDocRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/expenses`, expenseId);
       try {
         await deleteDoc(expenseDocRef);
         showModal('Despesa excluída com sucesso!');
@@ -839,7 +808,7 @@ const ExpensesSection = ({ expenses, currentMonthIndex, currentYear }) => {
 
       for (let i = currentMonthIndex + 1; i < 12; i++) {
         const futureMonthStr = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
-        const futureExpensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${futureMonthStr}/expenses`);
+        const futureExpensesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${futureMonthStr}/expenses`);
 
         const q = query(futureExpensesRef,
           where("description", "==", expenseToPropagate.description),
@@ -1105,7 +1074,7 @@ const ExpenseDistributionChart = ({ expenses }) => {
 
 // Componente para a seção de Configurações
 const SettingsSection = () => {
-  const { db, userId, userConfig, setUserConfig, showModal, appId } = useContext(FirebaseContext);
+  const { db, userId, userConfig, setUserConfig, showModal } = useContext(FirebaseContext);
   const [newCategory, setNewCategory] = useState('');
   const [newPaymentMethod, setNewPaymentMethod] = useState('');
   const [newExpenseType, setNewExpenseType] = useState('');
@@ -1113,7 +1082,7 @@ const SettingsSection = () => {
 
   const saveConfig = async (updatedConfig) => {
     if (!db || !userId) return;
-    const userConfigRef = doc(db, `artifacts/${appId}/users/${userId}/userConfig`, 'settings');
+    const userConfigRef = doc(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/userConfig`, 'settings');
     try {
       await setDoc(userConfigRef, updatedConfig, { merge: true });
       setUserConfig(updatedConfig);
@@ -1219,7 +1188,7 @@ const SettingsSection = () => {
 
 // Componente para o Resumo Anual
 const AnnualSummary = ({ currentYear, activeTab }) => {
-  const { db, userId, showModal, setGlobalLoading, appId } = useContext(FirebaseContext);
+  const { db, userId, showModal, setGlobalLoading } = useContext(FirebaseContext);
   const [annualData, setAnnualData] = useState([]);
   const [loadingAnnual, setLoadingAnnual] = useState(false);
 
@@ -1243,8 +1212,8 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
       try {
         for (let i = 0; i < 12; i++) {
           const prevMonthStr = `${previousYear}-${String(i + 1).padStart(2, '0')}`;
-          const prevEntriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${prevMonthStr}/entries`);
-          const prevExpensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${prevMonthStr}/expenses`);
+          const prevEntriesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${prevMonthStr}/entries`);
+          const prevExpensesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${prevMonthStr}/expenses`);
 
           const prevEntriesSnap = await getDocs(prevEntriesRef);
           const prevExpensesSnap = await getDocs(prevExpensesRef);
@@ -1265,8 +1234,8 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
 
       for (let i = 0; i < 12; i++) {
         const monthStr = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
-        const entriesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/entries`);
-        const expensesRef = collection(db, `artifacts/${appId}/users/${userId}/financialData/${monthStr}/expenses`);
+        const entriesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/entries`);
+        const expensesRef = collection(db, `artifacts/${db.app.options.projectId || 'default-app-id'}/users/${userId}/financialData/${monthStr}/expenses`);
 
         try {
           const entriesSnapshot = await getDocs(entriesRef);
@@ -1303,7 +1272,7 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
     };
 
     fetchAnnualData();
-  }, [db, userId, currentYear, activeTab, appId, setGlobalLoading]);
+  }, [db, userId, currentYear, activeTab, db.app.options.projectId, setGlobalLoading]);
 
   const exportToCSV = () => {
     if (annualData.length === 0) {
@@ -1412,10 +1381,7 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
         const projection = [];
         let currentBalance = 0;
 
-        const allEntries = entries.map(e => ({ ...e, type: 'entry' }));
-        const allExpenses = expenses.map(e => ({ ...e, type: 'expense' }));
-
-        const sortedTransactions = [...allEntries, ...allExpenses].sort((a, b) => {
+        const sortedTransactions = [...entries, ...expenses].sort((a, b) => {
           return new Date(a.date) - new Date(b.date);
         });
 
@@ -1425,9 +1391,9 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
 
           sortedTransactions.forEach(transaction => {
             if (transaction.date === dateStr) {
-              if (transaction.type === 'entry') {
+              if (transaction.description) {
                 dailyNet += transaction.value;
-              } else { // type === 'expense'
+              } else {
                 dailyNet -= transaction.value;
               }
             }
@@ -1480,7 +1446,7 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
   };
 
   // Novo componente para o Resumo Mensal com gráfico de pizza
-  const MonthlySummaryChart = ({ entries, expenses, budgets, currentMonthIndex, currentYear }) => {
+  const MonthlySummaryChart = ({ entries, expenses, currentMonthIndex, currentYear }) => {
     const [chartData, setChartData] = useState([]);
     const [totalIncome, setTotalIncome] = useState(0);
     const [totalExpenses, setTotalExpenses] = useState(0);
@@ -1540,42 +1506,11 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
           </p>
         </div>
 
-        <div className="mt-8">
-          <h3 className="text-lg sm:text-xl font-bold mb-4 text-blue-700">Progresso do Orçamento</h3>
-          <div className="space-y-4">
-            {Object.keys(budgets).length > 0 ? (
-              Object.keys(budgets).map(category => {
-                const budgetAmount = budgets[category] || 0;
-                const spentAmount = expenses.filter(e => e.category === category).reduce((sum, e) => sum + e.value, 0);
-                const progress = budgetAmount > 0 ? (spentAmount / budgetAmount) * 100 : 0;
-                const progressBarColor = progress > 100 ? 'bg-red-500' : 'bg-green-500';
-
-                return (
-                  <div key={category}>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="font-semibold text-gray-700">{category}</span>
-                      <span className="text-sm text-gray-600">
-                        R$ {spentAmount.toFixed(2)} / R$ {budgetAmount.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-4">
-                      <div
-                        className={`${progressBarColor} h-4 rounded-full`}
-                        style={{ width: `${Math.min(progress, 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-4 bg-gray-50 rounded-lg text-center text-gray-600 text-sm sm:text-base">
-                Nenhum orçamento definido para este mês.
-              </div>
-            )}
+        {chartData.length === 0 || totalIncome === 0 ? (
+          <div className="mt-8 p-4 bg-gray-50 rounded-lg text-center text-gray-600 text-sm sm:text-base">
+            Nenhum dado de despesa ou entrada para exibir no gráfico para este mês.
           </div>
-        </div>
-
-        {chartData.length > 0 && totalIncome > 0 && (
+        ) : (
           <div className="mt-8">
             <h3 className="text-lg sm:text-xl font-bold mb-4 text-blue-700">Distribuição de Gastos em Relação à Entrada</h3>
             <ResponsiveContainer width="100%" height={300}>
@@ -1603,63 +1538,5 @@ const AnnualSummary = ({ currentYear, activeTab }) => {
       </div>
     );
   };
-
-// Componente para a seção de Orçamentos
-const BudgetSection = ({ budgets, userConfig, currentMonthIndex, currentYear }) => {
-  const { db, userId, appId, showModal } = useContext(FirebaseContext);
-  const [localBudgets, setLocalBudgets] = useState(budgets);
-
-  useEffect(() => {
-    setLocalBudgets(budgets);
-  }, [budgets]);
-
-  const handleBudgetChange = (category, value) => {
-    setLocalBudgets(prev => ({
-      ...prev,
-      [category]: parseFloat(value) || 0,
-    }));
-  };
-
-  const handleSaveBudgets = async () => {
-    if (!db || !userId) return;
-    const monthStr = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, '0')}`;
-    const budgetDocRef = doc(db, `artifacts/${appId}/users/${userId}/budgets`, monthStr);
-    try {
-      await setDoc(budgetDocRef, localBudgets, { merge: true });
-      showModal('Orçamentos guardados com sucesso!');
-    } catch (e) {
-      console.error("Erro ao guardar orçamentos: ", e);
-      showModal('Erro ao guardar orçamentos.');
-    }
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-lg shadow-lg">
-      <h2 className="text-xl sm:text-2xl font-bold mb-4 text-blue-700">Gestão de Orçamentos</h2>
-      <div className="space-y-4">
-        {userConfig.categories.map(category => (
-          <div key={category} className="flex items-center justify-between">
-            <label className="text-lg text-gray-700">{category}</label>
-            <input
-              type="number"
-              value={localBudgets[category] || ''}
-              onChange={(e) => handleBudgetChange(category, e.target.value)}
-              className="p-2 border border-gray-300 rounded-md w-40 text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="R$ 0,00"
-            />
-          </div>
-        ))}
-      </div>
-      <div className="flex justify-end mt-6">
-        <button
-          onClick={handleSaveBudgets}
-          className="px-6 py-3 bg-blue-600 text-white rounded-md shadow-md hover:bg-blue-700 transition duration-200"
-        >
-          Guardar Orçamentos
-        </button>
-      </div>
-    </div>
-  );
-};
 
   export default App;
